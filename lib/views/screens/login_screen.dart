@@ -68,32 +68,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // Logo do Money
                   Center(
-                    child: Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.08),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Text('💵', style: TextStyle(fontSize: 48)),
-                            );
-                          },
-                        ),
+                    child: SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Center(
+                            child: Text('💵', style: TextStyle(fontSize: 48)),
+                          );
+                        },
                       ),
                     ),
                   ),

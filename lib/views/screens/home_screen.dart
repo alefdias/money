@@ -38,8 +38,8 @@ class HomeScreen extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Text('💚', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 6),
+                  Image.asset('assets/images/logo.png', width: 22, height: 22),
+                  const SizedBox(width: 8),
                   Text(
                     controller.family?.name ?? 'Money',
                     style: const TextStyle(
