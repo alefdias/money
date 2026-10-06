@@ -23,7 +23,8 @@ service cloud.firestore {
     // Coleção de Famílias
     match /families/{familyId} {
       allow create: if isAuthenticated();
-      allow read, update: if isAuthenticated() && (
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated() && (
         request.auth.uid in resource.data.memberIds ||
         request.resource.data.memberIds.hasAny([request.auth.uid])
       );

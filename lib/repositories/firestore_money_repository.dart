@@ -10,6 +10,11 @@ import 'money_repository.dart';
 
 class FirestoreMoneyRepository implements MoneyRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  String? _activeFamilyId;
+
+  void setActiveFamily(String familyId) {
+    _activeFamilyId = familyId;
+  }
 
   @override
   Future<void> init() async {}
@@ -67,6 +72,7 @@ class FirestoreMoneyRepository implements MoneyRepository {
           'familyId': family.id,
         }, SetOptions(merge: true));
 
+        _activeFamilyId = family.id;
         return family;
       }
     }
@@ -94,11 +100,13 @@ class FirestoreMoneyRepository implements MoneyRepository {
       'familyId': newFamilyRef.id,
     }, SetOptions(merge: true));
 
+    _activeFamilyId = newFamilyRef.id;
     return newFamily;
   }
 
   @override
   Future<List<UserProfile>> getFamilyMembers(String familyId) async {
+    _activeFamilyId = familyId;
     final query = await _firestore
         .collection('users')
         .where('familyId', isEqualTo: familyId)
@@ -145,7 +153,15 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> deleteExpense(String expenseId) async {
-    // Apaga na collectionGroup ou através da subcoleção
+    if (_activeFamilyId != null) {
+      await _firestore
+          .collection('families')
+          .doc(_activeFamilyId)
+          .collection('expenses')
+          .doc(expenseId)
+          .delete();
+      return;
+    }
     final query = await _firestore
         .collectionGroup('expenses')
         .where('id', isEqualTo: expenseId)
@@ -158,6 +174,7 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<List<Income>> getIncomes(String familyId) async {
+    _activeFamilyId = familyId;
     final query = await _firestore
         .collection('families')
         .doc(familyId)
@@ -168,6 +185,7 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Stream<List<Income>> watchIncomes(String familyId) {
+    _activeFamilyId = familyId;
     return _firestore
         .collection('families')
         .doc(familyId)
@@ -188,6 +206,15 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> deleteIncome(String incomeId) async {
+    if (_activeFamilyId != null) {
+      await _firestore
+          .collection('families')
+          .doc(_activeFamilyId)
+          .collection('incomes')
+          .doc(incomeId)
+          .delete();
+      return;
+    }
     final query = await _firestore
         .collectionGroup('incomes')
         .where('id', isEqualTo: incomeId)
@@ -240,6 +267,15 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> deleteFixedExpense(String id) async {
+    if (_activeFamilyId != null) {
+      await _firestore
+          .collection('families')
+          .doc(_activeFamilyId)
+          .collection('fixed_expenses')
+          .doc(id)
+          .delete();
+      return;
+    }
     final query = await _firestore
         .collectionGroup('fixed_expenses')
         .where('id', isEqualTo: id)
@@ -252,6 +288,7 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<List<Debt>> getDebts(String familyId) async {
+    _activeFamilyId = familyId;
     final query = await _firestore
         .collection('families')
         .doc(familyId)
@@ -262,6 +299,7 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Stream<List<Debt>> watchDebts(String familyId) {
+    _activeFamilyId = familyId;
     return _firestore
         .collection('families')
         .doc(familyId)
@@ -292,6 +330,15 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> deleteDebt(String id) async {
+    if (_activeFamilyId != null) {
+      await _firestore
+          .collection('families')
+          .doc(_activeFamilyId)
+          .collection('debts')
+          .doc(id)
+          .delete();
+      return;
+    }
     final query = await _firestore
         .collectionGroup('debts')
         .where('id', isEqualTo: id)
