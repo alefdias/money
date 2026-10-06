@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar autenticação
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para verificar pertencimento à família
+    function isFamilyMember(familyId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberIds
+      );
+    }
+
+    // Coleção de Usuários
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Coleção de Famílias
+    match /families/{familyId} {
+      allow create: if isAuthenticated();
+      allow read, update: if isAuthenticated() && (
+        request.auth.uid in resource.data.memberIds ||
+        request.resource.data.memberIds.hasAny([request.auth.uid])
+      );
+      
+      // Subcoleções protegidas por família
+      match /expenses/{expenseId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+      
+      match /incomes/{incomeId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+      
+      match /fixed_expenses/{fixedExpenseId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+      
+      match /debts/{debtId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+      
+      match /goals/{goalId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+    }
+  }
+}
