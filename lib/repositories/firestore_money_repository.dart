@@ -21,6 +21,82 @@ class FirestoreMoneyRepository implements MoneyRepository {
     return Family.fromMap(doc.data()!, id: doc.id);
   }
 
+  // Cria ou busca família do usuário no primeiro login
+  Future<Family> getOrCreateUserFamily({
+    required String userId,
+    required String userName,
+    required String email,
+    String? inviteCodeToJoin,
+  }) async {
+    // 1. Verifica se usuário já tem familyId vinculado
+    final userDoc = await _firestore.collection('users').doc(userId).get();
+    if (userDoc.exists && userDoc.data() != null) {
+      final existingFamilyId = userDoc.data()!['familyId'];
+      if (existingFamilyId != null) {
+        final fam = await getFamily(existingFamilyId);
+        if (fam != null) return fam;
+      }
+    }
+
+    // 2. Se informou código de convite para entrar na família do parceiro
+    if (inviteCodeToJoin != null && inviteCodeToJoin.trim().isNotEmpty) {
+      final query = await _firestore
+          .collection('families')
+          .where('inviteCode', isEqualTo: inviteCodeToJoin.trim())
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final famDoc = query.docs.first;
+        final family = Family.fromMap(famDoc.data(), id: famDoc.id);
+        
+        // Adiciona usuário como membro
+        if (!family.memberIds.contains(userId)) {
+          final updatedMembers = [...family.memberIds, userId];
+          await _firestore.collection('families').doc(family.id).update({
+            'memberIds': updatedMembers,
+          });
+        }
+
+        // Salva perfil do usuário
+        await _firestore.collection('users').doc(userId).set({
+          'id': userId,
+          'name': userName,
+          'email': email,
+          'avatarEmoji': '👤',
+          'familyId': family.id,
+        }, SetOptions(merge: true));
+
+        return family;
+      }
+    }
+
+    // 3. Cria uma nova família para o usuário
+    final newFamilyRef = _firestore.collection('families').doc();
+    final inviteCode = 'MONEY-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+    
+    final newFamily = Family(
+      id: newFamilyRef.id,
+      name: 'Família de $userName',
+      inviteCode: inviteCode,
+      memberIds: [userId],
+      createdAt: DateTime.now(),
+    );
+
+    await newFamilyRef.set(newFamily.toMap());
+
+    // Salva perfil do usuário
+    await _firestore.collection('users').doc(userId).set({
+      'id': userId,
+      'name': userName,
+      'email': email,
+      'avatarEmoji': '👤',
+      'familyId': newFamilyRef.id,
+    }, SetOptions(merge: true));
+
+    return newFamily;
+  }
+
   @override
   Future<List<UserProfile>> getFamilyMembers(String familyId) async {
     final query = await _firestore
@@ -69,8 +145,15 @@ class FirestoreMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> deleteExpense(String expenseId) async {
-    // Busca e deleta através de collectionGroup ou caminho da família
-    // Na prática a ID é deletada na subcoleção
+    // Apaga na collectionGroup ou através da subcoleção
+    final query = await _firestore
+        .collectionGroup('expenses')
+        .where('id', isEqualTo: expenseId)
+        .limit(1)
+        .get();
+    for (final doc in query.docs) {
+      await doc.reference.delete();
+    }
   }
 
   @override
@@ -104,7 +187,16 @@ class FirestoreMoneyRepository implements MoneyRepository {
   }
 
   @override
-  Future<void> deleteIncome(String incomeId) async {}
+  Future<void> deleteIncome(String incomeId) async {
+    final query = await _firestore
+        .collectionGroup('incomes')
+        .where('id', isEqualTo: incomeId)
+        .limit(1)
+        .get();
+    for (final doc in query.docs) {
+      await doc.reference.delete();
+    }
+  }
 
   @override
   Future<List<FixedExpense>> getFixedExpenses(String familyId) async {
@@ -147,7 +239,16 @@ class FirestoreMoneyRepository implements MoneyRepository {
   }
 
   @override
-  Future<void> deleteFixedExpense(String id) async {}
+  Future<void> deleteFixedExpense(String id) async {
+    final query = await _firestore
+        .collectionGroup('fixed_expenses')
+        .where('id', isEqualTo: id)
+        .limit(1)
+        .get();
+    for (final doc in query.docs) {
+      await doc.reference.delete();
+    }
+  }
 
   @override
   Future<List<Debt>> getDebts(String familyId) async {
@@ -190,7 +291,16 @@ class FirestoreMoneyRepository implements MoneyRepository {
   }
 
   @override
-  Future<void> deleteDebt(String id) async {}
+  Future<void> deleteDebt(String id) async {
+    final query = await _firestore
+        .collectionGroup('debts')
+        .where('id', isEqualTo: id)
+        .limit(1)
+        .get();
+    for (final doc in query.docs) {
+      await doc.reference.delete();
+    }
+  }
 
   @override
   Future<FinancialGoal?> getGoal(String familyId) async {

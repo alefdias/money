@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../models/fixed_expense.dart';
@@ -11,10 +12,11 @@ import '../models/budget_summary.dart';
 import '../core/engine/money_calculator.dart';
 import '../repositories/money_repository.dart';
 import '../repositories/local_money_repository.dart';
+import '../repositories/firestore_money_repository.dart';
 import '../services/gemini_service.dart';
 
 class MoneyController extends ChangeNotifier {
-  final MoneyRepository _repository;
+  MoneyRepository _repository;
   final GeminiService _geminiService = GeminiService();
   final _uuid = const Uuid();
 
@@ -72,15 +74,62 @@ class MoneyController extends ChangeNotifier {
     _debts = await _repository.getDebts(familyId);
     _goal = await _repository.getGoal(familyId);
 
-    // Initial greeting from Gemini
+    _chatMessages.clear();
     _chatMessages.add(
       GeminiMessage(
-        text: 'Olá! Sou o assistente financeiro do Money. Posso te dizer quanto vocês ainda podem gastar hoje, analisar seus maiores gastos ou calcular se uma compra cabe no orçamento. Como posso ajudar?',
+        text: 'Olá! Sou seu assistente financeiro do Money. Como posso ajudar com suas contas hoje?',
         isUser: false,
       ),
     );
 
-    // Subscribe to streams for real-time updates
+    _subscribeToStreams(familyId);
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Inicialização 100% real conectada à conta Firebase do usuário
+  Future<void> initWithFirebaseUser(User user, {String? inviteCode}) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final firestoreRepo = FirestoreMoneyRepository();
+    _repository = firestoreRepo;
+
+    final realFamily = await firestoreRepo.getOrCreateUserFamily(
+      userId: user.uid,
+      userName: user.displayName ?? (user.email?.split('@').first ?? 'Usuário'),
+      email: user.email ?? '',
+      inviteCodeToJoin: inviteCode,
+    );
+
+    _family = realFamily;
+    _currentUser = UserProfile(
+      id: user.uid,
+      name: user.displayName ?? (user.email?.split('@').first ?? 'Usuário'),
+      email: user.email ?? '',
+      avatarEmoji: '👤',
+      familyId: realFamily.id,
+    );
+
+    _members = await _repository.getFamilyMembers(realFamily.id);
+    if (_members.isEmpty) {
+      _members = [_currentUser!];
+    }
+
+    _expenses = await _repository.getExpenses(realFamily.id);
+    _incomes = await _repository.getIncomes(realFamily.id);
+    _fixedExpenses = await _repository.getFixedExpenses(realFamily.id);
+    _debts = await _repository.getDebts(realFamily.id);
+    _goal = await _repository.getGoal(realFamily.id);
+
+    _subscribeToStreams(realFamily.id);
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  void _subscribeToStreams(String familyId) {
     _repository.watchExpenses(familyId).listen((data) {
       _expenses = data;
       notifyListeners();
@@ -105,18 +154,15 @@ class MoneyController extends ChangeNotifier {
       _goal = data;
       notifyListeners();
     });
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   UserProfile get user1 => _members.isNotEmpty
       ? _members[0]
-      : const UserProfile(id: 'user_1', name: 'Você', email: '', avatarEmoji: '🧑‍💻');
+      : (_currentUser ?? const UserProfile(id: 'user_1', name: 'Você', email: '', avatarEmoji: '👤'));
 
   UserProfile get user2 => _members.length > 1
       ? _members[1]
-      : const UserProfile(id: 'user_2', name: 'Amor', email: '', avatarEmoji: '👩‍🎨');
+      : const UserProfile(id: 'user_2', name: 'Parceiro(a)', email: '', avatarEmoji: '👥');
 
   BudgetSummary get summary {
     return MoneyCalculator.calculate(
@@ -150,7 +196,7 @@ class MoneyController extends ChangeNotifier {
     final member = _members.firstWhere((m) => m.id == userId, orElse: () => _currentUser!);
     final newExpense = Expense(
       id: _uuid.v4(),
-      familyId: _family?.id ?? 'family_demo_1',
+      familyId: _family?.id ?? 'family_real_1',
       userId: userId,
       userName: member.name,
       description: description,
@@ -182,7 +228,7 @@ class MoneyController extends ChangeNotifier {
   }) async {
     final item = FixedExpense(
       id: _uuid.v4(),
-      familyId: _family?.id ?? 'family_demo_1',
+      familyId: _family?.id ?? 'family_real_1',
       name: name,
       amount: amount,
       dueDay: dueDay,
@@ -201,7 +247,7 @@ class MoneyController extends ChangeNotifier {
     final member = _members.firstWhere((m) => m.id == userId, orElse: () => _currentUser!);
     final income = Income(
       id: _uuid.v4(),
-      familyId: _family?.id ?? 'family_demo_1',
+      familyId: _family?.id ?? 'family_real_1',
       userId: userId,
       userName: member.name,
       title: title,
@@ -221,7 +267,7 @@ class MoneyController extends ChangeNotifier {
   }) async {
     final debt = Debt(
       id: _uuid.v4(),
-      familyId: _family?.id ?? 'family_demo_1',
+      familyId: _family?.id ?? 'family_real_1',
       title: title,
       installmentAmount: installmentAmount,
       totalInstallments: totalInstallments,
@@ -233,11 +279,11 @@ class MoneyController extends ChangeNotifier {
 
   Future<void> updateSavingsGoal(double newMonthlyTarget) async {
     final currentGoal = _goal ??
-        const FinancialGoal(
+        FinancialGoal(
           id: 'goal_1',
-          familyId: 'family_demo_1',
+          familyId: _family?.id ?? 'family_real_1',
           title: 'Reserva Familiar',
-          monthlyTarget: 1000.0,
+          monthlyTarget: newMonthlyTarget,
         );
     final updated = currentGoal.copyWith(monthlyTarget: newMonthlyTarget);
     await _repository.saveGoal(updated);

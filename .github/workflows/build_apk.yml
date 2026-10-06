@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Verify Code Formatting & Analysis
+        run: flutter analyze
+
+      - name: Run Tests
+        run: flutter test
+
+      - name: Build Android Release APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: money-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:uuid/uuid.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../models/fixed_expense.dart';
@@ -10,8 +11,7 @@ import '../models/family.dart';
 import 'money_repository.dart';
 
 class LocalMoneyRepository implements MoneyRepository {
-  static const String defaultFamilyId = 'family_demo_1';
-  final _uuid = const Uuid();
+  static const String defaultFamilyId = 'family_real_1';
 
   late Family _family;
   final List<UserProfile> _members = [];
@@ -29,226 +29,85 @@ class LocalMoneyRepository implements MoneyRepository {
 
   @override
   Future<void> init() async {
-    final now = DateTime.now();
+    final prefs = await SharedPreferences.getInstance();
 
-    // 1. Família inicial
-    _family = Family(
-      id: defaultFamilyId,
-      name: 'Nossa Família',
-      inviteCode: 'MONEY-7890',
-      memberIds: ['user_1', 'user_2'],
-      createdAt: now.subtract(const Duration(days: 60)),
-    );
+    // 1. Família real
+    final familyJson = prefs.getString('money_family');
+    if (familyJson != null) {
+      _family = Family.fromMap(jsonDecode(familyJson));
+    } else {
+      _family = Family(
+        id: defaultFamilyId,
+        name: 'Nossa Família',
+        inviteCode: 'MONEY-${DateTime.now().millisecond + 1000}',
+        memberIds: ['user_1'],
+        createdAt: DateTime.now(),
+      );
+      await prefs.setString('money_family', jsonEncode(_family.toMap()));
+    }
 
-    // 2. Dois usuários iniciais
+    // 2. Membros reais
+    final membersJson = prefs.getStringList('money_members');
     _members.clear();
-    _members.addAll([
-      const UserProfile(
-        id: 'user_1',
-        name: 'Você',
-        email: 'voce@money.app',
-        avatarEmoji: '🧑‍💻',
-        familyId: defaultFamilyId,
-      ),
-      const UserProfile(
-        id: 'user_2',
-        name: 'Amor',
-        email: 'amor@money.app',
-        avatarEmoji: '👩‍🎨',
-        familyId: defaultFamilyId,
-      ),
-    ]);
+    if (membersJson != null && membersJson.isNotEmpty) {
+      for (final m in membersJson) {
+        _members.add(UserProfile.fromMap(jsonDecode(m)));
+      }
+    } else {
+      _members.add(
+        const UserProfile(
+          id: 'user_1',
+          name: 'Você',
+          email: '',
+          avatarEmoji: '👤',
+          familyId: defaultFamilyId,
+        ),
+      );
+    }
 
-    // 3. Rendas iniciais (conforme especificação: R$ 4.000 + R$ 2.500 = R$ 6.500)
+    // 3. Rendas reais (inicia vazio, sem dados falsos)
+    final incomesJson = prefs.getStringList('money_incomes');
     _incomes.clear();
-    _incomes.addAll([
-      Income(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_1',
-        userName: 'Você',
-        title: 'Salário Principal',
-        amount: 4000.0,
-        category: 'Salário',
-        date: DateTime(now.year, now.month, 5),
-      ),
-      Income(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_2',
-        userName: 'Amor',
-        title: 'Salário Parceiro(a)',
-        amount: 2500.0,
-        category: 'Salário',
-        date: DateTime(now.year, now.month, 5),
-      ),
-    ]);
+    if (incomesJson != null) {
+      for (final i in incomesJson) {
+        _incomes.add(Income.fromMap(jsonDecode(i)));
+      }
+    }
 
-    // 4. Contas Fixas (R$ 2.800)
+    // 4. Contas Fixas reais (inicia vazio, sem dados falsos)
+    final fixedJson = prefs.getStringList('money_fixed_expenses');
     _fixedExpenses.clear();
-    _fixedExpenses.addAll([
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Aluguel do Apartamento',
-        amount: 1600.0,
-        dueDay: 10,
-        isPaid: true,
-        responsibleUserId: 'user_1',
-        category: 'Moradia',
-      ),
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Energia Elétrica',
-        amount: 280.0,
-        dueDay: 15,
-        isPaid: false,
-        responsibleUserId: 'user_2',
-        category: 'Contas',
-      ),
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Internet Fibra',
-        amount: 130.0,
-        dueDay: 12,
-        isPaid: true,
-        category: 'Assinaturas',
-      ),
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Condomínio',
-        amount: 420.0,
-        dueDay: 8,
-        isPaid: true,
-        category: 'Moradia',
-      ),
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Streamings (Netflix & Spotify)',
-        amount: 90.0,
-        dueDay: 20,
-        isPaid: false,
-        category: 'Assinaturas',
-      ),
-      FixedExpense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        name: 'Plano de Saúde',
-        amount: 280.0,
-        dueDay: 25,
-        isPaid: false,
-        category: 'Saúde',
-      ),
-    ]);
+    if (fixedJson != null) {
+      for (final f in fixedJson) {
+        _fixedExpenses.add(FixedExpense.fromMap(jsonDecode(f)));
+      }
+    }
 
-    // 5. Dívidas / Parcelamentos (R$ 700: Notebook R$ 250 + Reforma R$ 450)
+    // 5. Dívidas reais (inicia vazio, sem dados falsos)
+    final debtsJson = prefs.getStringList('money_debts');
     _debts.clear();
-    _debts.addAll([
-      Debt(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        title: 'Notebook Trabalho',
-        installmentAmount: 250.0,
-        totalInstallments: 10,
-        paidInstallments: 3,
-        dueDay: 10,
-      ),
-      Debt(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        title: 'Reforma da Sala',
-        installmentAmount: 450.0,
-        totalInstallments: 6,
-        paidInstallments: 4,
-        dueDay: 15,
-      ),
-    ]);
+    if (debtsJson != null) {
+      for (final d in debtsJson) {
+        _debts.add(Debt.fromMap(jsonDecode(d)));
+      }
+    }
 
-    // 6. Meta de Economia (R$ 1.000 para guardar)
-    _goal = const FinancialGoal(
-      id: 'goal_1',
-      familyId: defaultFamilyId,
-      title: 'Reserva de Emergência & Sonhos',
-      monthlyTarget: 1000.0,
-      currentSaved: 4800.0,
-    );
+    // 6. Meta real
+    final goalJson = prefs.getString('money_goal');
+    if (goalJson != null) {
+      _goal = FinancialGoal.fromMap(jsonDecode(goalJson));
+    } else {
+      _goal = null; // Zero fake data
+    }
 
-    // 7. Gastos recentes de exemplo (incluindo compras de hoje)
+    // 7. Gastos reais (inicia vazio, sem dados falsos)
+    final expensesJson = prefs.getStringList('money_expenses');
     _expenses.clear();
-    _expenses.addAll([
-      // Gastos de hoje
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_1',
-        userName: 'Você',
-        description: 'Mercado Semanal',
-        amount: 87.50,
-        categoryId: 'food',
-        date: now,
-        paymentMethod: 'Pix',
-      ),
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_2',
-        userName: 'Amor',
-        description: 'Farmácia & Vitaminas',
-        amount: 32.00,
-        categoryId: 'health',
-        date: now,
-        paymentMethod: 'Cartão de Débito',
-      ),
-      // Gastos recentes nos últimos dias
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_1',
-        userName: 'Você',
-        description: 'Posto de Combustível',
-        amount: 100.00,
-        categoryId: 'fuel',
-        date: now.subtract(const Duration(days: 1)),
-        paymentMethod: 'Pix',
-      ),
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_2',
-        userName: 'Amor',
-        description: 'Padaria & Lanche',
-        amount: 45.00,
-        categoryId: 'food',
-        date: now.subtract(const Duration(days: 2)),
-        paymentMethod: 'Pix',
-      ),
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_1',
-        userName: 'Você',
-        description: 'Almoço Restaurante',
-        amount: 78.00,
-        categoryId: 'food',
-        date: now.subtract(const Duration(days: 3)),
-        paymentMethod: 'Cartão de Crédito',
-      ),
-      Expense(
-        id: _uuid.v4(),
-        familyId: defaultFamilyId,
-        userId: 'user_2',
-        userName: 'Amor',
-        description: 'Ração e Petiscos Pet',
-        amount: 95.00,
-        categoryId: 'pets',
-        date: now.subtract(const Duration(days: 4)),
-        paymentMethod: 'Pix',
-      ),
-    ]);
+    if (expensesJson != null) {
+      for (final e in expensesJson) {
+        _expenses.add(Expense.fromMap(jsonDecode(e)));
+      }
+    }
 
     _notifyAll();
   }
@@ -259,6 +118,34 @@ class LocalMoneyRepository implements MoneyRepository {
     _fixedExpensesStreamController.add(List.unmodifiable(_fixedExpenses));
     _debtsStreamController.add(List.unmodifiable(_debts));
     _goalStreamController.add(_goal);
+  }
+
+  Future<void> _saveExpenses() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _expenses.map((e) => jsonEncode(e.toMap())).toList();
+    await prefs.setStringList('money_expenses', list);
+    _expensesStreamController.add(List.unmodifiable(_expenses));
+  }
+
+  Future<void> _saveIncomes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _incomes.map((i) => jsonEncode(i.toMap())).toList();
+    await prefs.setStringList('money_incomes', list);
+    _incomesStreamController.add(List.unmodifiable(_incomes));
+  }
+
+  Future<void> _saveFixedExpenses() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _fixedExpenses.map((f) => jsonEncode(f.toMap())).toList();
+    await prefs.setStringList('money_fixed_expenses', list);
+    _fixedExpensesStreamController.add(List.unmodifiable(_fixedExpenses));
+  }
+
+  Future<void> _saveDebts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _debts.map((d) => jsonEncode(d.toMap())).toList();
+    await prefs.setStringList('money_debts', list);
+    _debtsStreamController.add(List.unmodifiable(_debts));
   }
 
   @override
@@ -272,7 +159,12 @@ class LocalMoneyRepository implements MoneyRepository {
     final idx = _members.indexWhere((m) => m.id == user.id);
     if (idx != -1) {
       _members[idx] = user;
+    } else {
+      _members.add(user);
     }
+    final prefs = await SharedPreferences.getInstance();
+    final list = _members.map((m) => jsonEncode(m.toMap())).toList();
+    await prefs.setStringList('money_members', list);
   }
 
   @override
@@ -284,13 +176,13 @@ class LocalMoneyRepository implements MoneyRepository {
   @override
   Future<void> addExpense(Expense expense) async {
     _expenses.insert(0, expense);
-    _expensesStreamController.add(List.unmodifiable(_expenses));
+    await _saveExpenses();
   }
 
   @override
   Future<void> deleteExpense(String expenseId) async {
     _expenses.removeWhere((e) => e.id == expenseId);
-    _expensesStreamController.add(List.unmodifiable(_expenses));
+    await _saveExpenses();
   }
 
   @override
@@ -302,13 +194,13 @@ class LocalMoneyRepository implements MoneyRepository {
   @override
   Future<void> addIncome(Income income) async {
     _incomes.add(income);
-    _incomesStreamController.add(List.unmodifiable(_incomes));
+    await _saveIncomes();
   }
 
   @override
   Future<void> deleteIncome(String incomeId) async {
     _incomes.removeWhere((i) => i.id == incomeId);
-    _incomesStreamController.add(List.unmodifiable(_incomes));
+    await _saveIncomes();
   }
 
   @override
@@ -320,7 +212,7 @@ class LocalMoneyRepository implements MoneyRepository {
   @override
   Future<void> addFixedExpense(FixedExpense fixedExpense) async {
     _fixedExpenses.add(fixedExpense);
-    _fixedExpensesStreamController.add(List.unmodifiable(_fixedExpenses));
+    await _saveFixedExpenses();
   }
 
   @override
@@ -328,14 +220,14 @@ class LocalMoneyRepository implements MoneyRepository {
     final idx = _fixedExpenses.indexWhere((f) => f.id == fixedExpense.id);
     if (idx != -1) {
       _fixedExpenses[idx] = fixedExpense;
-      _fixedExpensesStreamController.add(List.unmodifiable(_fixedExpenses));
+      await _saveFixedExpenses();
     }
   }
 
   @override
   Future<void> deleteFixedExpense(String id) async {
     _fixedExpenses.removeWhere((f) => f.id == id);
-    _fixedExpensesStreamController.add(List.unmodifiable(_fixedExpenses));
+    await _saveFixedExpenses();
   }
 
   @override
@@ -347,7 +239,7 @@ class LocalMoneyRepository implements MoneyRepository {
   @override
   Future<void> addDebt(Debt debt) async {
     _debts.add(debt);
-    _debtsStreamController.add(List.unmodifiable(_debts));
+    await _saveDebts();
   }
 
   @override
@@ -355,14 +247,14 @@ class LocalMoneyRepository implements MoneyRepository {
     final idx = _debts.indexWhere((d) => d.id == debt.id);
     if (idx != -1) {
       _debts[idx] = debt;
-      _debtsStreamController.add(List.unmodifiable(_debts));
+      await _saveDebts();
     }
   }
 
   @override
   Future<void> deleteDebt(String id) async {
     _debts.removeWhere((d) => d.id == id);
-    _debtsStreamController.add(List.unmodifiable(_debts));
+    await _saveDebts();
   }
 
   @override
@@ -374,6 +266,8 @@ class LocalMoneyRepository implements MoneyRepository {
   @override
   Future<void> saveGoal(FinancialGoal goal) async {
     _goal = goal;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('money_goal', jsonEncode(goal.toMap()));
     _goalStreamController.add(_goal);
   }
 }

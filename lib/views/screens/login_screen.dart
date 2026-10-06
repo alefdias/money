@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../controllers/money_controller.dart';
+import '../../services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../main_navigation_screen.dart';
 
@@ -10,16 +13,54 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final AuthService _authService = AuthService();
   bool _isSignUp = false;
   bool _isLoading = false;
+  bool _hasBiometrics = false;
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController(text: 'voce@money.app');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _familyCodeController = TextEditingController();
 
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final hasPrev = await _authService.hasPreviousLogin();
+    if (!hasPrev) return;
+
+    final canBio = await _authService.canCheckBiometrics();
+    if (mounted) {
+      setState(() {
+        _hasBiometrics = canBio;
+      });
+      // Se já logou antes e tem biometria, tenta autenticar
+      if (_hasBiometrics) {
+        _loginWithBiometrics();
+      }
+    }
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    final authenticated = await _authService.authenticateWithBiometrics();
+    if (authenticated && mounted) {
+      final user = _authService.currentUser;
+      if (user != null) {
+        await context.read<MoneyController>().initWithFirebaseUser(user);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -30,26 +71,83 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleAuth() async {
+  Future<void> _handleEmailAuth() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    // Simula autenticação / login com delay agradável
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      if (_isSignUp) {
+        final cred = await _authService.registerWithEmailPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
+        if (cred.user != null && mounted) {
+          await cred.user!.updateDisplayName(_nameController.text.trim());
+          if (!mounted) return;
+          await context.read<MoneyController>().initWithFirebaseUser(
+                cred.user!,
+                inviteCode: _familyCodeController.text.trim(),
+              );
+        }
+      } else {
+        final cred = await _authService.signInWithEmailPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
+        if (cred.user != null && mounted) {
+          await context.read<MoneyController>().initWithFirebaseUser(cred.user!);
+        }
+      }
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-    );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha na autenticação: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').trim()}'),
+          backgroundColor: AppColors.overLimit,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  void _enterDemo() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-    );
+  Future<void> _handleGoogleAuth() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final cred = await _authService.signInWithGoogle();
+      if (cred != null && cred.user != null && mounted) {
+        await context.read<MoneyController>().initWithFirebaseUser(
+              cred.user!,
+              inviteCode: _familyCodeController.text.trim().isNotEmpty
+                  ? _familyCodeController.text.trim()
+                  : null,
+            );
+
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha no login com Google: $e'),
+          backgroundColor: AppColors.overLimit,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -66,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo do Money
+                  // Logo 3D Oficial do Money
                   Center(
                     child: SizedBox(
                       width: 140,
@@ -82,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // Título & Subtítulo
                   const Text(
@@ -104,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
                   // Alternador Entrar / Criar Conta
                   Container(
@@ -178,7 +276,69 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+
+                  // Botão "Continuar com o Google"
+                  OutlinedButton(
+                    onPressed: _isLoading ? null : _handleGoogleAuth,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppColors.border),
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF4285F4),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'G',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Continuar com o Google',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Divisor
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'ou use seu e-mail',
+                          style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
 
                   // Campo Nome (Apenas no Cadastro)
                   if (_isSignUp) ...[
@@ -191,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: (val) {
                         if (_isSignUp && (val == null || val.trim().isEmpty)) {
-                          return 'Por favor, informe seu nome';
+                          return 'Informe seu nome';
                         }
                         return null;
                       },
@@ -199,13 +359,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Campo Email
+                  // Campo Email (Placeholder gmail)
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'E-mail',
-                      hintText: 'seuemail@exemplo.com',
+                      hintText: 'seuemail@gmail.com',
                       prefixIcon: Icon(Icons.mail_outline_rounded),
                     ),
                     validator: (val) {
@@ -226,6 +386,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Senha',
+                      hintText: 'Sua senha segura',
                       prefixIcon: const Icon(Icons.lock_outline_rounded),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -242,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
 
-                  // Campo Código da Família (Opcional no Cadastro)
+                  // Campo Código do Parceiro (Opcional no Cadastro)
                   if (_isSignUp) ...[
                     const SizedBox(height: 16),
                     TextFormField(
@@ -255,43 +416,36 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
 
                   // Botão Principal
                   ElevatedButton(
-                    onPressed: _isLoading ? null : _handleAuth,
+                    onPressed: _isLoading ? null : _handleEmailAuth,
                     child: _isLoading
                         ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : Text(_isSignUp ? 'Cadastrar e Começar' : 'Entrar no Money'),
+                        : Text(_isSignUp ? 'Cadastrar Conta' : 'Entrar com E-mail'),
                   ),
-                  const SizedBox(height: 16),
 
-                  // Divisor
-                  Row(
-                    children: const [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'ou',
-                          style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                  // Botão Biometria / Impressão Digital (se já logou antes)
+                  if (_hasBiometrics && !_isSignUp) ...[
+                    const SizedBox(height: 14),
+                    TextButton.icon(
+                      onPressed: _loginWithBiometrics,
+                      icon: const Icon(Icons.fingerprint_rounded, size: 24, color: AppColors.primary),
+                      label: const Text(
+                        'Entrar com Impressão Digital',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
                         ),
                       ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Botão Demo / Convidado
-                  OutlinedButton.icon(
-                    onPressed: _enterDemo,
-                    icon: const Icon(Icons.play_circle_outline_rounded, color: AppColors.primary),
-                    label: const Text('Entrar no Modo Demonstração'),
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
