@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../services/card_notification_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/planning_screen.dart';
 import 'screens/gemini_screen.dart';
 import 'screens/profile_screen.dart';
 import 'modals/add_expense_modal.dart';
+import 'modals/card_transaction_detected_modal.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -16,6 +19,26 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  StreamSubscription? _cardTransactionSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicia monitoramento de notificações de cartões de bancos
+    CardNotificationService.instance.init();
+
+    _cardTransactionSub = CardNotificationService.instance.onTransactionDetected.listen((detection) {
+      if (mounted) {
+        CardTransactionDetectedModal.show(context, detection);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _cardTransactionSub?.cancel();
+    super.dispose();
+  }
 
   void _onNavigateTab(int index) {
     setState(() => _currentIndex = index);

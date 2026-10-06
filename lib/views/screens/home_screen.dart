@@ -7,6 +7,7 @@ import '../widgets/month_budget_card.dart';
 import '../widgets/couple_spent_card.dart';
 import '../widgets/gemini_insight_card.dart';
 import '../widgets/expense_card.dart';
+import 'connected_accounts_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final Function(int) onNavigateTab;
@@ -54,6 +55,16 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.credit_card_rounded, color: AppColors.primary),
+            tooltip: 'Contas & Cartões',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ConnectedAccountsScreen()),
+              );
+            },
+          ),
           // Active User Badge
           Padding(
             padding: const EdgeInsets.only(right: 16),

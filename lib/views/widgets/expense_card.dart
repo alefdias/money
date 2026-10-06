@@ -102,6 +102,24 @@ class ExpenseCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (expense.isInstallment) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${expense.installmentNumber}/${expense.installmentsCount}x',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

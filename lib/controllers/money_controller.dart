@@ -192,21 +192,60 @@ class MoneyController extends ChangeNotifier {
     required String paymentMethod,
     DateTime? date,
     String? notes,
+    bool isInstallment = false,
+    int installmentsCount = 1,
+    int installmentNumber = 1,
+    String? installmentGroupId,
+    bool createAllInstallments = false,
   }) async {
     final member = _members.firstWhere((m) => m.id == userId, orElse: () => _currentUser!);
-    final newExpense = Expense(
-      id: _uuid.v4(),
-      familyId: _family?.id ?? 'family_real_1',
-      userId: userId,
-      userName: member.name,
-      description: description,
-      amount: amount,
-      categoryId: categoryId,
-      date: date ?? DateTime.now(),
-      paymentMethod: paymentMethod,
-      notes: notes,
-    );
-    await _repository.addExpense(newExpense);
+    final baseDate = date ?? DateTime.now();
+
+    if (isInstallment && createAllInstallments && installmentsCount > 1) {
+      final groupId = installmentGroupId ?? _uuid.v4();
+      final installmentValue = amount / installmentsCount;
+
+      for (int i = 1; i <= installmentsCount; i++) {
+        final installmentDate = DateTime(baseDate.year, baseDate.month + (i - 1), baseDate.day);
+        final expense = Expense(
+          id: _uuid.v4(),
+          familyId: _family?.id ?? 'family_real_1',
+          userId: userId,
+          userName: member.name,
+          description: '$description ($i/${installmentsCount}x)',
+          amount: double.parse(installmentValue.toStringAsFixed(2)),
+          categoryId: categoryId,
+          date: installmentDate,
+          paymentMethod: paymentMethod,
+          notes: notes,
+          isInstallment: true,
+          installmentsCount: installmentsCount,
+          installmentNumber: i,
+          installmentGroupId: groupId,
+        );
+        await _repository.addExpense(expense);
+      }
+    } else {
+      final newExpense = Expense(
+        id: _uuid.v4(),
+        familyId: _family?.id ?? 'family_real_1',
+        userId: userId,
+        userName: member.name,
+        description: isInstallment && installmentsCount > 1 && !description.contains('(')
+            ? '$description ($installmentNumber/${installmentsCount}x)'
+            : description,
+        amount: amount,
+        categoryId: categoryId,
+        date: baseDate,
+        paymentMethod: paymentMethod,
+        notes: notes,
+        isInstallment: isInstallment,
+        installmentsCount: installmentsCount,
+        installmentNumber: installmentNumber,
+        installmentGroupId: installmentGroupId,
+      );
+      await _repository.addExpense(newExpense);
+    }
   }
 
   Future<void> deleteExpense(String expenseId) async {

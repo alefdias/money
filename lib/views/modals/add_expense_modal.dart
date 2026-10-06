@@ -31,6 +31,10 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
   String _selectedPaymentMethod = 'Pix';
   DateTime _selectedDate = DateTime.now();
 
+  bool _isInstallment = false;
+  int _installmentsCount = 2;
+  bool _createAllMonths = true;
+
   final List<String> _paymentMethods = [
     'Pix',
     'Cartão de Crédito',
@@ -68,6 +72,8 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
         ? ExpenseCategory.findById(_selectedCategoryId).name
         : _descriptionController.text.trim();
 
+    final isCardInstallment = _isInstallment || _selectedPaymentMethod == 'Cartão de Crédito' && _isInstallment;
+
     context.read<MoneyController>().addExpense(
       description: description,
       amount: amount,
@@ -76,6 +82,9 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
       paymentMethod: _selectedPaymentMethod,
       date: _selectedDate,
       notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+      isInstallment: isCardInstallment,
+      installmentsCount: isCardInstallment ? _installmentsCount : 1,
+      createAllInstallments: isCardInstallment && _createAllMonths,
     );
 
     Navigator.of(context).pop();
@@ -342,6 +351,95 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+
+            // Pergunta de Parcelamento (Ativa se Cartão de Crédito ou opção selecionada)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.credit_card_rounded, size: 18, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Text(
+                            'É compra parcelada?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: _isInstallment,
+                        activeColor: AppColors.primary,
+                        onChanged: (val) {
+                          setState(() {
+                            _isInstallment = val;
+                            if (val && _selectedPaymentMethod != 'Cartão de Crédito') {
+                              _selectedPaymentMethod = 'Cartão de Crédito';
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_isInstallment) ...[
+                    const Divider(height: 16),
+                    const Text(
+                      'Em quantas vezes?',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [2, 3, 4, 5, 6, 10, 12].map((count) {
+                        final isSel = _installmentsCount == count;
+                        return ChoiceChip(
+                          label: Text('${count}x'),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            fontWeight: isSel ? FontWeight.w800 : FontWeight.w500,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) setState(() => _installmentsCount = count);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      value: _createAllMonths,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'Criar despesas das próximas parcelas nos meses seguintes',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      onChanged: (val) {
+                        setState(() => _createAllMonths = val ?? true);
+                      },
+                    ),
+                  ],
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 

@@ -5,6 +5,7 @@ import '../../controllers/money_controller.dart';
 import '../../services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import 'login_screen.dart';
+import 'connected_accounts_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -185,6 +186,61 @@ class ProfileScreen extends StatelessWidget {
                 ),
               );
             }),
+            // Card Contas e Cartões Conectados (Leitor de Notificações)
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ConnectedAccountsScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.credit_card_rounded, color: Color(0xFF7C3AED), size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Contas & Cartões Conectados',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4C1D95),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Leitor de notificações de cartão, Nubank, Itaú e parcelamentos',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF6D28D9)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF7C3AED)),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
 
             // Firebase Cloud Sync info card

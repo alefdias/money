@@ -9,6 +9,10 @@ class Expense {
   final DateTime date;
   final String paymentMethod;
   final String? notes;
+  final bool isInstallment;
+  final int installmentsCount;
+  final int installmentNumber;
+  final String? installmentGroupId;
 
   const Expense({
     required this.id,
@@ -21,7 +25,16 @@ class Expense {
     required this.date,
     required this.paymentMethod,
     this.notes,
+    this.isInstallment = false,
+    this.installmentsCount = 1,
+    this.installmentNumber = 1,
+    this.installmentGroupId,
   });
+
+  String get installmentLabel {
+    if (!isInstallment || installmentsCount <= 1) return '';
+    return '($installmentNumber/${installmentsCount}x)';
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -35,6 +48,10 @@ class Expense {
       'date': date.toIso8601String(),
       'paymentMethod': paymentMethod,
       'notes': notes,
+      'isInstallment': isInstallment,
+      'installmentsCount': installmentsCount,
+      'installmentNumber': installmentNumber,
+      'installmentGroupId': installmentGroupId,
     };
   }
 
@@ -52,6 +69,10 @@ class Expense {
           : DateTime.now(),
       paymentMethod: map['paymentMethod'] ?? 'Pix',
       notes: map['notes'],
+      isInstallment: map['isInstallment'] ?? false,
+      installmentsCount: (map['installmentsCount'] as num?)?.toInt() ?? 1,
+      installmentNumber: (map['installmentNumber'] as num?)?.toInt() ?? 1,
+      installmentGroupId: map['installmentGroupId'],
     );
   }
 
@@ -66,6 +87,10 @@ class Expense {
     DateTime? date,
     String? paymentMethod,
     String? notes,
+    bool? isInstallment,
+    int? installmentsCount,
+    int? installmentNumber,
+    String? installmentGroupId,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -78,6 +103,10 @@ class Expense {
       date: date ?? this.date,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       notes: notes ?? this.notes,
+      isInstallment: isInstallment ?? this.isInstallment,
+      installmentsCount: installmentsCount ?? this.installmentsCount,
+      installmentNumber: installmentNumber ?? this.installmentNumber,
+      installmentGroupId: installmentGroupId ?? this.installmentGroupId,
     );
   }
 }
