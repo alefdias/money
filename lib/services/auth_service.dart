@@ -14,7 +14,9 @@ class AuthService {
     }
   }
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '134959488780-em03ct2erll6ef409cj9e694907bhjr7.apps.googleusercontent.com',
+  );
   final LocalAuthentication _localAuth = LocalAuthentication();
 
   User? get currentUser {
